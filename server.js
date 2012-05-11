@@ -3,6 +3,7 @@ var io = require('socket.io').listen(app);
 
 var port = process.env.PORT || 9000;
 app.listen(port);
+console.log("STARTING PORT NUMBER : " + port);
 
 app.all('/*', function (req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
