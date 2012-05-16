@@ -1,26 +1,23 @@
 var app = require('express').createServer()
 var io = require('socket.io').listen(app);
 
+//For heroku, it selects port number on deploy.
 var port = process.env.PORT || 9000;
 app.listen(port);
+
 console.log("STARTING PORT NUMBER : " + port);
 
+//So that the plugin can use sockets without getting blocked by the browser
 app.all('/*', function (req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "X-Requested-With");
   next();
 });
 
-// // routing
-// app.all('/', function (req, res) {
-//   res.header("Access-Control-Allow-Origin", "*");
-//   res.header("Access-Control-Allow-Headers", "X-Requested-With");
-//   res.sendfile(__dirname + '/index.html');
-// });
-
 var masterSelected = false;
 var master = null;
 
+//on new connection
 io.sockets.on('connection', function (socket) {
 
    // when the master sends 'sendupdate', this listens and executes
@@ -63,22 +60,6 @@ io.sockets.on('connection', function (socket) {
 
    //new client joined
    broadcastMasterStatus();
-   
-   /*
-   // when the client emits 'adduser', this listens and executes
-   socket.on('adduser', function(username){
-      // we store the username in the socket session for this client
-      socket.username = username;
-      // add the client's username to the global list
-      usernames[username] = username;
-      // echo to client they've connected
-      socket.emit('updatechat', 'SERVER', 'you have connected');
-      // echo globally (all clients) that a person has connected
-      socket.broadcast.emit('updatechat', 'SERVER', username + ' has connected');
-      // update the list of users in chat, client-side
-      io.sockets.emit('updateusers', usernames);
-   });
-   */
 
    // when the user disconnects.. perform this
    socket.on('disconnect', function(){
