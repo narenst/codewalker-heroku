@@ -58,6 +58,11 @@ function removeParticipant(roomId) {
 }
 
 function joinRoom(socket, roomId) {
+   if (roomId.length == 0) {
+      sendFailure(socket, "join", "invalid roomId");
+      return;
+   }
+
    if (socketToRoomMap.hasOwnProperty(socket.id)) {
       sendFailure(socket, "join", "already part of a room : " + 
                      socketToRoomMap[socket.id]);
@@ -79,7 +84,7 @@ function leaveRoom(socket) {
 
       //clear master if this socket was the master
       if(master.hasOwnProperty(roomId) &&
-         master[roomId] == socket) {
+         master[roomId] == socket.id) {
          delete master[roomId];
       }
       socket.leave(roomId);
@@ -87,6 +92,60 @@ function leaveRoom(socket) {
       removeParticipant(roomId);
       sendMasterUpdate(roomId);
    }
+}
+
+function updateMasterStatus(socket, status) {
+   if (!socketToRoomMap.hasOwnProperty(socket.id)) {
+      sendFailure(socket, "master", "has not joined any room before");
+      return;
+   }
+
+   roomId = socketToRoomMap[socket.id];
+   isMasterSelected = master.hasOwnProperty(roomId);
+
+   if (status == "true") {
+      //if master is previously selected
+      if (isMasterSelected) {
+         sendFailure(socket, "master", "master already selected");
+         return;
+      }
+      master[roomId] = socket.id;
+      sendSuccess(socket, "master");
+      sendMasterUpdate(roomId);
+      return;
+   }
+
+   if (status == "false") {
+      if (isMasterSelected && 
+          master[roomId] == socket.id) {
+         delete master[roomId];
+      }
+      sendSuccess(socket, "master");
+      sendMasterUpdate(roomId);
+      return;
+   }
+
+   sendFailure(socket, "master", "invalid status : " + status);
+}
+
+function forwardUpdate(socket, data) {
+   if (!socketToRoomMap.hasOwnProperty(socket.id)) {
+      sendFailure(socket, "update", "has not joined any room before");
+      return;
+   }
+
+   roomId = socketToRoomMap[socket.id];
+   isMasterSelected = master.hasOwnProperty(roomId);
+
+   //if master is previously selected
+   if (!isMasterSelected ||
+       master[roomId] != socket.id) {
+      sendFailure(socket, "update", "not the master for the room");
+      return;
+   }
+
+   socket.broadcast.to(roomId).emit('update', data);
+   sendSuccess(socket, "update");
 }
 
 //on new connection
@@ -106,51 +165,21 @@ io.sockets.on('connection', function (socket) {
       leaveRoom(socket);
    });
 
+   //when socket sends master status
+   socket.on('master', function (status) {
+      console.log("received master status from client");
+      updateMasterStatus(socket, status);
+   });
 
-   // when the master sends 'sendupdate', this listens and executes
-   socket.on('sendupdate', function (data) {
+   //when socket sends master status
+   socket.on('update', function (data) {
       console.log("received update from client : " + data);
-      io.sockets.emit('update', "master", data);
+      forwardUpdate(socket, data);
    });
-
-   //the master is selected
-   socket.on('selectMaster', function (data) {
-      console.log("received selectMaster : " + data);
-      if (!masterSelected) {
-         setMaster(socket);
-      }
-   });
-
-   socket.on('clearMaster', function (data) {
-      console.log("received clearMaster : " + data);
-      if (masterSelected) {
-         clearMaster();
-      }
-   });
-
-   function broadcastMasterStatus() {
-      console.log("broadcasting masterSelected : " + masterSelected);
-      io.sockets.emit('masterSelected', masterSelected);
-   }
-
-   function setMaster(socket) {
-      masterSelected = true;
-      master = socket;
-      broadcastMasterStatus();
-   }
-
-   function clearMaster() {
-      master = null;
-      masterSelected = false;
-      broadcastMasterStatus();
-   }   
-
-   //new client joined
-   //broadcastMasterStatus();
-
+   
    // when the user disconnects.. perform this
    socket.on('disconnect', function(){
-      if (socketToRoomMap.hasOwnProperty(socket)) {
+      if (socketToRoomMap.hasOwnProperty(socket.id)) {
          leaveRoom(socket);
       }
    });
